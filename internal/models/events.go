@@ -22,7 +22,7 @@ type Events struct {
 	Title           string      `json:"title"`
 	Description     *string     `json:"description,omitempty"`
 	StartsAt        time.Time   `json:"starts_at"`
-	Duration        int         `json:"duration"`
+	DurationMinutes int         `json:"duration_minutes"`
 	LocationName    *string     `json:"location_name,omitempty"`
 	LocationCoords  *string     `json:"location_coords,omitempty"`
 	MaxParticipants *int        `json:"max_participants,omitempty"`
@@ -30,4 +30,16 @@ type Events struct {
 	EventCode       int         `json:"event_code"`
 	CreatedAt       time.Time   `json:"created_at"`
 	UpdatedAt       time.Time   `json:"updated_at"`
+}
+
+type UpdateEventParams struct {
+	Title           *string      `json:"title"`
+	Description     *string      `json:"description"`
+	IsPrivate       *bool        `json:"is_private"`
+	StartsAt        *time.Time   `json:"starts_at"`
+	DurationMinutes *int         `json:"duration_minutes"`
+	LocationName    *string      `json:"location_name"`
+	LocationCoords  *string      `json:"location_coords"`
+	MaxParticipants *int         `json:"max_participants"`
+	Status          *EventStatus `json:"status"`
 }

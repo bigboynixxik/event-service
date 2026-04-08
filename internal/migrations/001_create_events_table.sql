@@ -1,12 +1,12 @@
 -- +goose Up
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE IF NOT EXISTS events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creator_id UUID NOT NULL,
     is_private BOOLEAN NOT NULL DEFAULT FALSE,
     title TEXT NOT NULL,
-    description EXT,
+    description TEXT,
     starts_at TIMESTAMPTZ NOT NULL,
-    duration INT NOT NULL,
+    duration_minutes INT NOT NULL,
     location_name TEXT,
     location_coords TEXT,
     max_participants INT,
@@ -18,4 +18,4 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS events;
