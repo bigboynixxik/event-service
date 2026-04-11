@@ -1,0 +1,310 @@
+syntax = "proto3";
+
+package event;
+
+option go_package = "pkg/api/v1";
+import "google/protobuf/timestamp.proto";
+
+// Сервис управления мероприятиями (Eventify)
+service EventService{
+  // Создать новое мероприятие
+  // Требует авторизации
+  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
+
+  // Получить список мероприятий конкретного пользователя
+  // Требует авторизации
+  rpc ListUserEvents(ListUserEventsRequest) returns (ListUserEventsResponse);
+
+  // Получить список всех мероприятий
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+
+  // Получить информацию о конкретном мероприятии по его ID
+  rpc GetEvent(GetEventRequest) returns (GetEventResponse);
+
+  // Обновить информацию о конкретном мероприятии по его ID
+  // Требует авторизации
+  rpc UpdateEvent(UpdateEventRequest) returns (UpdateEventResponse);
+
+  // Присоединиться к мероприятию по ссылке.
+  // Требует авторизации
+  rpc JoinEvent(JoinEventRequest) returns (JoinEventResponse);
+
+  // Выход пользователя из мероприятия
+  // Требует авторизации
+  rpc LeaveEvent(LeaveEventRequest) returns (LeaveEventResponse);
+
+  // Удалить участника из мероприятия
+  // Требует авторизации и проверки роли
+  rpc RemoveParticipant(RemoveParticipantRequest) returns (RemoveParticipantResponse);
+
+  // Получить список участников
+  rpc GetEventParticipants(GetEventParticipantsRequest) returns (GetEventParticipantsResponse);
+
+  // Добавить предмет в чеклист
+  // Требует авторизации
+  rpc AddChecklistItem(AddChecklistItemRequest) returns (AddChecklistItemResponse);
+
+  // Удалить предмет из чеклиста
+  // Требует Авторизации
+  rpc RemoveChecklistItem(RemoveChecklistItemRequest) returns (RemoveChecklistItemResponse);
+
+  // Пометить предмет, как купленный
+  // Требует авторизации
+  rpc MarkItemPurchased(MarkItemPurchasedRequest) returns (MarkItemPurchasedResponse);
+
+  // Получить чеклист мероприятия
+  // Требует авторизации
+  rpc GetEventChecklist(GetEventChecklistRequest) returns (GetEventChecklistResponse);
+
+  // Отменить мероприятие
+  // Требует авторизации
+  rpc CancelEvent(CancelEventRequest) returns (CancelEventResponse);
+
+  // Создание ссылки приглашения на мероприятие со статусом
+  // Требует авторизации
+  rpc CreateInviteLink(CreateInviteLinkRequest) returns (CreateInviteLinkResponse);
+}
+
+// Информация о мероприятии
+message EventInfo {
+  string id = 1;
+  // Название мероприятия
+  string title = 2;
+  // Описание мероприятия
+  string description = 3;
+  // Дата-время начала мероприятия
+  google.protobuf.Timestamp starts_at = 4;
+  // Длительность мероприятия
+  int32 duration = 5;
+  // Статус мероприятия (draft / active / cancelled / completed)
+  string status = 6;
+  // Приватность
+  bool is_private = 7;
+}
+
+// Информация об участнике мероприятия
+message ParticipantInfo {
+  string participant_id = 1;
+  // Имя
+  string name = 2;
+  // Роль в мероприятии
+  string role = 3;
+  // Участие в мероприятии ('invited', 'confirmed', 'declined', 'maybe')
+  string status = 4;
+}
+
+// Информация о предмете в чеклисте
+message ChecklistItemInfo {
+  string id = 1;
+  // Название товара
+  string title = 2;
+  // Количество товара
+  int32 quantity = 3;
+  // Единица измерения
+  string unit = 4;
+  // Опционально: id ответственного
+  optional string buyer_id = 5;
+  // Опционально: статус: куплено/нет
+  optional bool is_purchased = 6;
+}
+
+// Запрос о создании мероприятия
+message CreateEventRequest {
+  // Название мероприятия
+  string title = 1;
+  // Описание мероприятия
+  string description = 2;
+  // Приватное или нет
+  bool is_private = 3;
+  // Длительность
+  int32 duration_minutes = 4;
+  // Дата время начала мероприятия
+  google.protobuf.Timestamp starts_at = 5;
+  // Название локации
+  string location_name = 6;
+  // Максимальное количество участников
+  int32 max_participants = 7;
+  // Опционально: координаты мероприятия
+  optional string location_coords = 8;
+}
+
+// Ответ на создание мероприятия - его id
+message CreateEventResponse {
+  string id = 1;
+}
+
+// Запрос на получения списка мероприятий пользователя
+message ListUserEventsRequest {
+  // Передавать user_id через контекст
+}
+
+// Ответ на получение списка мероприятий пользователя
+message ListUserEventsResponse {
+  // Список ивентов
+  repeated EventInfo events = 1;
+}
+
+// Запрос на получения всех мероприятий
+message GetEventRequest {
+  string id = 1;
+}
+
+// Ответ на получение информации о мероприятии
+message GetEventResponse {
+  // Само мероприятие
+  EventInfo event = 1;
+}
+
+// Запрос на обновление данных о мероприятии
+message UpdateEventRequest {
+  string event_id = 1;
+  // Опционально: название мероприятия
+  optional string title = 2;
+  // Опционально: описание мероприятия
+  optional string description = 3;
+  // Опционально: дата начала мероприятия
+  optional google.protobuf.Timestamp starts_at = 4;
+  // Опционально: название локации
+  optional string location_name = 5;
+  // Опционально: координаты локации
+  optional string location_coords = 6;
+}
+
+// Ответ на обновление данных о мероприятии - его обновлённые данные
+message UpdateEventResponse {
+  EventInfo event = 1;
+}
+
+// Пустой запрос на получение списка всех мероприятий
+message ListEventsRequest {
+}
+
+// Ответ на запрос получения списка мероприятий
+message ListEventsResponse {
+  // Список всех мероприятий
+  repeated EventInfo events = 1;
+}
+
+// Запрос на присоединение к мероприятию
+message JoinEventRequest {
+  // код для ссылки-приглашения на мероприятие
+  string event_code = 1;
+}
+
+// Ответ на запрос присоединения к мероприятию
+message JoinEventResponse {
+  string event_id = 1;
+  // Успешно/не успешно
+  bool success = 2;
+}
+
+// Запрос на выход из мероприятия конкретного пользователя
+message LeaveEventRequest {
+  string event_id = 1;
+  // user_id передавать через контекст
+}
+
+// Ответ на запрос выхода из мероприятия
+message LeaveEventResponse {
+  // Успешно/ не успешно
+  bool success = 1;
+}
+
+// Удалить участника из мероприятия
+message RemoveParticipantRequest {
+  string event_id = 1;
+  string participant_id = 2;
+}
+
+// Ответ на запрос по удалению из мероприятия
+message RemoveParticipantResponse {
+  // Успешно/ не успешно
+  bool success = 1;
+}
+
+// Запрос на получение списка всех участников мероприятия
+message GetEventParticipantsRequest {
+  string event_id = 1;
+}
+
+// Ответ на запрос получения списка всех участников мероприятия
+message GetEventParticipantsResponse {
+  // Список всех участников
+  repeated ParticipantInfo participants = 1;
+}
+
+// Запрос на добавление элемента в чеклист
+message AddChecklistItemRequest {
+  string event_id = 1;
+  string title = 2;
+  int32 quantity = 3;
+  string unit = 4;
+}
+
+// Ответ на запрос добавления элемента в чеклист
+message AddChecklistItemResponse {
+  string item_id = 1;
+}
+
+// Запрос на удаление предмета из чеклиста
+message RemoveChecklistItemRequest {
+  string event_id = 1;
+  string item_id = 2;
+}
+
+// Ответ на запрос удаления предмета из чеклиста
+message RemoveChecklistItemResponse {
+  bool success = 1;
+}
+
+// Запрос на изменения статуса покупки предмета из чеклиста
+message MarkItemPurchasedRequest {
+  string event_id = 1;
+  string item_id = 2;
+  // id ответственного (если нужно его добавить/изменить)
+  optional string buyer_id = 3;
+  // куплено/ не куплено
+  optional bool is_purchased = 4;
+}
+
+// Ответ на запрос изменения статуса покупки предмета из чеклиста
+message MarkItemPurchasedResponse {
+  // успешно / не успешно
+  bool success = 1;
+}
+
+// Запрос на получение чеклиста мероприятия
+message GetEventChecklistRequest {
+  string event_id = 1;
+}
+
+// Ответ на запрос получения чеклиста мероприятия
+message GetEventChecklistResponse {
+  // Список предметов в чеклисте
+  repeated ChecklistItemInfo checklist = 1;
+}
+
+// Запрос на отмену мероприятия
+message CancelEventRequest {
+  string event_id = 1;
+}
+
+// Ответ на запрос по отмене мероприятия
+message CancelEventResponse {
+  // Успешно/ не успешно
+  bool success = 1;
+}
+
+// Запрос на создание ссылки-приглашения
+message CreateInviteLinkRequest {
+  string event_id = 1;
+  // Тип приглашения (single/multi/unlimited)
+  string invite_type = 2;
+  // До какого момента действует ссылка
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+// Ответ на запрос создания ссылки приглашения
+message CreateInviteLinkResponse {
+  string event_code = 1;
+}

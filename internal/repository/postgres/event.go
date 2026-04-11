@@ -4,6 +4,9 @@ import (
 	"context"
 	"eventify-events/internal/models"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
@@ -17,6 +20,7 @@ type EventRepository struct {
 }
 
 var eventColumns = []string{"id", "creator_id", "is_private", "title", "description", "starts_at", "duration", "location_name", "location_coords", "max_participants", "status", "event_code", "created_at", "updated_at"}
+var eventParticipantColumns = []string{"id", "user_id", "event_id", "is_owner", "can_edit_event", "can_manage_participants", "can_manage_checklist", "role", "status", "joined_at", "left_at"}
 
 func NewEventRepository(db *pgxpool.Pool) *EventRepository {
 	return &EventRepository{
@@ -107,4 +111,69 @@ func (r *EventRepository) ListEvents(ctx context.Context) ([]models.Events, erro
 		return nil, fmt.Errorf("failed to collect row: %w", err)
 	}
 	return events, nil
+}
+
+func (r *EventRepository) UpdateEvent(ctx context.Context, params models.UpdateEventParams, id uuid.UUID) (models.Events, error) {
+	updateData := make(map[string]any)
+
+	v := reflect.ValueOf(params)
+	t := reflect.TypeOf(params)
+
+	for i := 0; i < v.NumField(); i++ {
+		fieldValue := v.Field(i)
+		fieldType := t.Field(i)
+
+		if fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil() {
+			tagName := fieldType.Tag.Get("json")
+			columnName := strings.Split(tagName, ",")[0]
+
+			if columnName != "" && columnName != "-" {
+				updateData[columnName] = fieldValue.Elem().Interface()
+			}
+		}
+	}
+
+	if len(updateData) == 0 {
+		return r.GetEvent(ctx, id)
+	}
+
+	sql, args, err := r.builder.
+		Update("events").
+		SetMap(updateData).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+
+	if err != nil {
+		return models.Events{}, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	if _, err := r.db.Exec(ctx, sql, args...); err != nil {
+		return models.Events{}, fmt.Errorf("failed to execute update: %w", err)
+	}
+
+	return r.GetEvent(ctx, id)
+}
+
+func (r *EventRepository) JoinEvent(ctx context.Context, userId uuid.UUID, eventId uuid.UUID) (uuid.UUID, bool, error) {
+	p := models.EventParticipants{
+		ID:       uuid.New(),
+		UserID:   userId,
+		EventID:  eventId,
+		Status:   "confirmed",
+		JoinedAt: time.Now(),
+	}
+	sql, args, err := r.builder.Insert("event_participants").
+		Columns(eventParticipantColumns...).
+		Values(p.Values()...).
+		ToSql()
+
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	if _, err := r.db.Exec(ctx, sql, args...); err != nil {
+		return uuid.Nil, false, fmt.Errorf("failed to execute insert: %w", err)
+	}
+
+	return eventId, true, nil
 }

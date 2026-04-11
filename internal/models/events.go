@@ -17,32 +17,28 @@ const (
 )
 
 type Events struct {
-	ID              uuid.UUID     `json:"id" db:"id"`
-	CreatorID       uuid.UUID     `json:"creator_id" db:"creator_id"`
-	IsPrivate       bool          `json:"is_private" db:"is_private"`
-	Title           string        `json:"title" db:"title"`
-	Description     *string       `json:"description,omitempty" db:"description"`
-	StartsAt        time.Time     `json:"starts_at" db:"starts_at"`
-	Duration        time.Duration `json:"duration" db:"duration"`
-	LocationName    *string       `json:"location_name,omitempty" db:"location_name"`
-	LocationCoords  *pgtype.Point `json:"location_coords,omitempty" db:"location_coords"`
-	MaxParticipants *int          `json:"max_participants,omitempty" db:"max_participants"`
-	Status          EventStatus   `json:"status" db:"status"`
-	EventCode       string        `json:"event_code" db:"event_code"`
-	CreatedAt       time.Time     `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at" db:"updated_at"`
+	ID              uuid.UUID       `json:"id" db:"id"`
+	CreatorID       uuid.UUID       `json:"creator_id" db:"creator_id"`
+	IsPrivate       bool            `json:"is_private" db:"is_private"`
+	Title           string          `json:"title" db:"title"`
+	Description     *string         `json:"description,omitempty" db:"description"`
+	StartsAt        time.Time       `json:"starts_at" db:"starts_at"`
+	Duration        pgtype.Interval `json:"duration" db:"duration"`
+	LocationName    *string         `json:"location_name,omitempty" db:"location_name"`
+	LocationCoords  *pgtype.Point   `json:"location_coords,omitempty" db:"location_coords"`
+	MaxParticipants *int            `json:"max_participants,omitempty" db:"max_participants"`
+	Status          EventStatus     `json:"status" db:"status"`
+	EventCode       string          `json:"event_code" db:"event_code"`
+	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 type UpdateEventParams struct {
-	Title           *string        `json:"title"`
-	Description     *string        `json:"description"`
-	IsPrivate       *bool          `json:"is_private"`
-	StartsAt        *time.Time     `json:"starts_at"`
-	Duration        *time.Duration `json:"duration"`
-	LocationName    *string        `json:"location_name"`
-	LocationCoords  *pgtype.Point  `json:"location_coords"`
-	MaxParticipants *int           `json:"max_participants"`
-	Status          *EventStatus   `json:"status"`
+	Title          *string       `json:"title" db:"title"`
+	Description    *string       `json:"description" db:"description"`
+	StartsAt       *time.Time    `json:"starts_at" db:"starts_at"`
+	LocationName   *string       `json:"location_name" db:"location_name"`
+	LocationCoords *pgtype.Point `json:"location_coords" db:"location_coords"`
 }
 
 func (e *Events) Values() []any {

@@ -28,3 +28,11 @@ type EventParticipants struct {
 	JoinedAt              time.Time               `json:"joined_at" db:"joined_at"`
 	LeftAt                *time.Time              `json:"left_at,omitempty" db:"left_at"`
 }
+
+func (e *EventParticipants) Values() []any {
+	return []any{
+		e.ID, e.UserID, e.EventID, e.IsOwner, e.CanEditEvent,
+		e.CanManageParticipants, e.CanManageChecklist, e.Role, e.Status,
+		e.JoinedAt, e.LeftAt,
+	}
+}
