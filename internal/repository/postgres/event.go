@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"eventify-events/internal/models"
 	"fmt"
 	"reflect"
@@ -154,7 +155,34 @@ func (r *EventRepository) UpdateEvent(ctx context.Context, params models.UpdateE
 	return r.GetEvent(ctx, id)
 }
 
-func (r *EventRepository) JoinEvent(ctx context.Context, userId uuid.UUID, eventId uuid.UUID) (uuid.UUID, bool, error) {
+func (r *EventRepository) JoinEvent(ctx context.Context, userId uuid.UUID, code string) (bool, error) {
+	sql, args, err := r.builder.Select("id").
+		From("events").
+		Where(squirrel.Eq{"event_code": code}).
+		ToSql()
+
+	if err != nil {
+		return false, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	var eventId uuid.UUID
+	err = r.db.QueryRow(ctx, sql, args...).Scan(&eventId)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to find event by code: %w", err)
+	}
+
+	_, joined, err := r.AddParticipant(ctx, userId, eventId)
+	if err != nil {
+		return false, fmt.Errorf("failed to add participant: %w", err)
+	}
+	return joined, nil
+}
+
+func (r *EventRepository) AddParticipant(ctx context.Context, userId uuid.UUID, eventId uuid.UUID) (uuid.UUID, bool, error) {
 	p := models.EventParticipants{
 		ID:       uuid.New(),
 		UserID:   userId,
@@ -165,17 +193,19 @@ func (r *EventRepository) JoinEvent(ctx context.Context, userId uuid.UUID, event
 	sql, args, err := r.builder.Insert("event_participants").
 		Columns(eventParticipantColumns...).
 		Values(p.Values()...).
+		Suffix("ON CONFLICT (user_id, event_id) DO NOTHING").
 		ToSql()
 
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	if _, err := r.db.Exec(ctx, sql, args...); err != nil {
+	res, err := r.db.Exec(ctx, sql, args...)
+	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("failed to execute insert: %w", err)
 	}
 
-	return eventId, true, nil
+	return eventId, res.RowsAffected() > 0, nil
 }
 
 func (r *EventRepository) RemoveParticipant(ctx context.Context, participantId uuid.UUID, eventId uuid.UUID) (bool, error) {
@@ -215,7 +245,7 @@ func (r *EventRepository) GetEventParticipants(ctx context.Context, eventId uuid
 	}
 	participants, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.EventParticipants])
 	if err != nil {
-		return nil, fmt.Errorf("filed to collect rows: %w", err)
+		return nil, fmt.Errorf("failed to collect rows: %w", err)
 	}
 
 	return participants, nil

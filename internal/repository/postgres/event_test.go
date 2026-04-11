@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	postgres2 "eventify-events/pkg/postgres"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 	ctx := context.Background()
 	dbURL := "postgres://user:password@localhost:5432/postgres?sslmode=disable"
 
-	pool, err := postgres.NewPool(ctx, dbURL)
+	pool, err := postgres2.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
 
@@ -128,7 +129,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		require.NoError(t, repo.CreateEvent(ctx, event))
 
 		userID := uuid.New()
-		returnedID, ok, err := repo.JoinEvent(ctx, userID, eID)
+		returnedID, ok, err := repo.AddParticipant(ctx, userID, eID)
 
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -145,12 +146,12 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 
 		userID := uuid.New()
 
-		_, ok1, err1 := repo.JoinEvent(ctx, userID, eID)
+		_, ok1, err1 := repo.AddParticipant(ctx, userID, eID)
 		assert.NoError(t, err1)
 		assert.True(t, ok1)
 
-		_, ok2, err2 := repo.JoinEvent(ctx, userID, eID)
-		assert.Error(t, err2)
+		_, ok2, err2 := repo.AddParticipant(ctx, userID, eID)
+		assert.NoError(t, err2)
 		assert.False(t, ok2)
 	})
 
@@ -158,7 +159,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		userID := uuid.New()
 		fakeEventID := uuid.New()
 
-		_, ok, err := repo.JoinEvent(ctx, userID, fakeEventID)
+		_, ok, err := repo.AddParticipant(ctx, userID, fakeEventID)
 
 		assert.Error(t, err)
 		assert.False(t, ok)
@@ -171,7 +172,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		}))
 
 		uID := uuid.New()
-		_, joined, err := repo.JoinEvent(ctx, uID, eID)
+		_, joined, err := repo.AddParticipant(ctx, uID, eID)
 		require.NoError(t, err)
 		require.True(t, joined)
 
@@ -204,7 +205,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		}))
 
 		uID := uuid.New()
-		_, _, _ = repo.JoinEvent(ctx, uID, eID)
+		_, _, _ = repo.AddParticipant(ctx, uID, eID)
 
 		left1, _ := repo.RemoveParticipant(ctx, uID, eID)
 		assert.True(t, left1)
@@ -229,16 +230,73 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		uID1 := uuid.New()
 		uID2 := uuid.New()
 
-		_, ok1, err1 := repo.JoinEvent(ctx, uID1, eID)
+		_, ok1, err1 := repo.AddParticipant(ctx, uID1, eID)
 		require.NoError(t, err1)
 		require.True(t, ok1)
 
-		_, ok2, err2 := repo.JoinEvent(ctx, uID2, eID)
+		_, ok2, err2 := repo.AddParticipant(ctx, uID2, eID)
 		require.NoError(t, err2)
 		require.True(t, ok2)
 
 		list, err := repo.GetEventParticipants(ctx, eID)
 		assert.NoError(t, err)
 		assert.Len(t, list, 2)
+	})
+	t.Run("Join event by code - success", func(t *testing.T) {
+		eID := uuid.New()
+		myCode := "TOP-SECRET"
+		event := models.Events{
+			ID:        eID,
+			CreatorID: uuid.New(),
+			Title:     "Code Party",
+			EventCode: myCode,
+			StartsAt:  time.Now().Add(time.Hour).Truncate(time.Second),
+			Status:    models.StatusDraft,
+		}
+		require.NoError(t, repo.CreateEvent(ctx, event))
+
+		uID := uuid.New()
+		joined, err := repo.JoinEvent(ctx, uID, myCode)
+
+		assert.NoError(t, err)
+		assert.True(t, joined)
+
+		participants, err := repo.GetEventParticipants(ctx, eID)
+		assert.NoError(t, err)
+		assert.Len(t, participants, 1)
+		assert.Equal(t, uID, participants[0].UserID)
+	})
+
+	t.Run("Join event by code - wrong code", func(t *testing.T) {
+		uID := uuid.New()
+
+		joined, err := repo.JoinEvent(ctx, uID, "WRONG-CODE-123")
+
+		assert.NoError(t, err)
+		assert.False(t, joined)
+	})
+
+	t.Run("Join event by code - already joined", func(t *testing.T) {
+		eID := uuid.New()
+		myCode := "DOUBLE-JOIN"
+
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eID, CreatorID: uuid.New(), Title: "Busy Event", EventCode: myCode,
+			StartsAt: time.Now().Add(time.Hour).Truncate(time.Second), Status: models.StatusDraft,
+		}))
+
+		uID := uuid.New()
+
+		ok1, err1 := repo.JoinEvent(ctx, uID, myCode)
+		require.NoError(t, err1)
+		assert.True(t, ok1)
+
+		ok2, err2 := repo.JoinEvent(ctx, uID, myCode)
+
+		assert.NoError(t, err2)
+		assert.False(t, ok2)
+
+		participants, _ := repo.GetEventParticipants(ctx, eID)
+		assert.Len(t, participants, 1)
 	})
 }
