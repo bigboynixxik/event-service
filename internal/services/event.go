@@ -5,6 +5,7 @@ import (
 	"eventify-events/internal/models"
 	"eventify-events/internal/repository"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +17,7 @@ type EventService struct {
 func NewEventService(repo repository.EventRepository) *EventService {
 	return &EventService{repo: repo}
 }
+
 
 func (s *EventService) checkPermission(ctx context.Context, userID, eventID uuid.UUID, permission string) error {
 	participants, err := s.repo.GetEventParticipants(ctx, eventID) // Эффективнее сделать GetEventParticapant в репозитории, чтобы не делать лишних запросов
@@ -47,6 +49,17 @@ func (s *EventService) checkPermission(ctx context.Context, userID, eventID uuid
 		return fmt.Errorf("permission denied: user %s lacks %s", userID, permission)
 	}
 	return fmt.Errorf("permission denied: user %s is not a participant", userID)
+}
+
+var availableStatuses = map[models.EventStatus]bool{
+    models.StatusDraft:  true,
+    models.StatusActive: true,
+}
+func checkEventStatus(status models.EventStatus) error {
+	if !availableStatuses[status] {
+		return fmt.Errorf("event status %s is not available", status)
+	}
+	return nil
 }
 
 func (s *EventService) GetEvent(ctx context.Context, uuid uuid.UUID) (*models.Events, error) {
@@ -96,7 +109,7 @@ func (s *EventService) JoinEvent(ctx context.Context, userId uuid.UUID, code str
 	}
 
 	// Проверка на статус (не cancelled и не completed)
-	if event.Status == models.StatusCancelled || event.Status == models.StatusCompleted {
+	if checkEventStatus(event.Status) != nil {
 		return false, fmt.Errorf("event with code %s is %s", code, event.Status)
 	}
 	_, joined, err := s.repo.JoinEvent(ctx, userId, event.ID)
@@ -105,6 +118,7 @@ func (s *EventService) JoinEvent(ctx context.Context, userId uuid.UUID, code str
 	}
 	return joined, nil
 }
+
 
 func (s *EventService) RemoveParticipant(ctx context.Context, callerId uuid.UUID, participantId uuid.UUID, eventId uuid.UUID) (bool, error) {
 	err := s.checkPermission(ctx, callerId, eventId, "can_manage_participants")
@@ -135,11 +149,71 @@ func (s *EventService) RemoveParticipant(ctx context.Context, callerId uuid.UUID
 		return false, fmt.Errorf("Service.RemoveParticipant : participant not found")
 	}
 
-	
 
 	removed, err := s.repo.RemoveParticipant(ctx, participantId, eventId)
 	if err != nil {
 		return false, fmt.Errorf("Service.RemoveParticipant : %w", err)
 	}
 	return removed, nil
+}
+
+func (s* EventService) GetEventParticapants(ctx context.Context, eventId uuid.UUID) ([]models.EventParticipants, error) {
+	participants, err := s.repo.GetEventParticipants(ctx, eventId)
+	if err != nil {
+		return nil, fmt.Errorf("Service.GetEventParticapants : %w", err)
+	}
+	return participants, nil
+}
+
+func (s* EventService) CancelEvent(ctx context.Context, callerId uuid.UUID, eventId uuid.UUID) (bool, error) {
+	err := s.checkPermission(ctx, callerId, eventId, "can_edit_event")
+	if err != nil {
+		return false, fmt.Errorf("Service.CancelEvent : %w", err)
+	}
+	event, err := s.repo.GetEvent(ctx, eventId)
+	if err != nil {
+		return false, fmt.Errorf("Service.CancelEvent : %w", err)
+	}
+
+	if checkEventStatus(event.Status) != nil{
+		return false, fmt.Errorf("Service.CancelEvent : %s", event.Status)
+	}
+
+	return s.repo.CancelEvent(ctx, eventId)
+}
+
+func (s* EventService) CreateInviteLink(ctx context.Context, callerId uuid.UUID, eventId uuid.UUID, inviteType string, expiresAt *time.Time) (string, error) { // Можно создать ссылку только для ивентов с доступным статусом
+	
+	event, err := s.repo.GetEvent(ctx, eventId)
+	if err != nil {
+		return "", fmt.Errorf("Service.CreateInviteLink : %w", err)
+	}
+
+	if checkEventStatus(event.Status) != nil{
+		return "", fmt.Errorf("Service.CreateInviteLink : %s", event.Status)
+	}
+	if event.IsPrivate { // Если приватный - нужно разрешение на создание ссылки
+		err := s.checkPermission(ctx, callerId, eventId, "can_manage_participants")
+		if err != nil {
+			return "", fmt.Errorf("Service.CreateInviteLink : %w", err)
+		}
+	}
+	return s.repo.CreateInviteLink(ctx, eventId, inviteType, expiresAt)
+}
+
+func (s* EventService) UpdateEvent(ctx context.Context, callerId uuid.UUID, eventId uuid.UUID, params models.UpdateEventParams) (models.Events, error) {
+	err := s.checkPermission(ctx, callerId, eventId, "can_edit_event")
+	if err != nil {
+		return models.Events{}, fmt.Errorf("Service.UpdateEvent : %w", err)
+	}
+	event, err := s.repo.GetEvent(ctx, eventId)
+	if err != nil {
+		return models.Events{}, fmt.Errorf("Service.UpdateEvent : %w", err)
+	}
+
+	if checkEventStatus(event.Status) != nil{
+		return models.Events{}, fmt.Errorf("Service.UpdateEvent : %s", event.Status)
+	}
+
+	return s.repo.UpdateEvent(ctx, params, eventId)
 }
