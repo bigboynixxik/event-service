@@ -127,7 +127,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		require.NoError(t, repo.CreateEvent(ctx, event))
 
 		userID := uuid.New()
-		returnedID, ok, err := repo.JoinEvent(ctx, userID, eID)
+		returnedID, ok, err := repo.JoinEvent(ctx, userID, eID, false)
 
 		assert.NoError(t, err)
 		assert.True(t, ok)
@@ -142,11 +142,11 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		}))
 
 		userID := uuid.New()
-		_, ok1, err1 := repo.JoinEvent(ctx, userID, eID)
+		_, ok1, err1 := repo.JoinEvent(ctx, userID, eID, false)
 		assert.NoError(t, err1)
 		assert.True(t, ok1)
 
-		_, ok2, err2 := repo.JoinEvent(ctx, userID, eID)
+		_, ok2, err2 := repo.JoinEvent(ctx, userID, eID, false)
 		assert.NoError(t, err2)
 		assert.False(t, ok2)
 	})
@@ -154,7 +154,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 	t.Run("Join event - non-existent event", func(t *testing.T) {
 		userID := uuid.New()
 		fakeEventID := uuid.New()
-		_, ok, err := repo.JoinEvent(ctx, userID, fakeEventID)
+		_, ok, err := repo.JoinEvent(ctx, userID, fakeEventID, false)
 		assert.Error(t, err)
 		assert.False(t, ok)
 	})
@@ -167,7 +167,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		}))
 
 		uID := uuid.New()
-		_, joined, err := repo.JoinEvent(ctx, uID, eID)
+		_, joined, err := repo.JoinEvent(ctx, uID, eID, false)
 		require.NoError(t, err)
 		require.True(t, joined)
 
@@ -197,7 +197,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		}))
 
 		uID := uuid.New()
-		_, _, _ = repo.JoinEvent(ctx, uID, eID)
+		_, _, _ = repo.JoinEvent(ctx, uID, eID, false)
 
 		left1, _ := repo.RemoveParticipant(ctx, uID, eID)
 		assert.True(t, left1)
@@ -223,11 +223,11 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		uID1 := uuid.New()
 		uID2 := uuid.New()
 
-		_, ok1, err1 := repo.JoinEvent(ctx, uID1, eID)
+		_, ok1, err1 := repo.JoinEvent(ctx, uID1, eID, false)
 		require.NoError(t, err1)
 		require.True(t, ok1)
 
-		_, ok2, err2 := repo.JoinEvent(ctx, uID2, eID)
+		_, ok2, err2 := repo.JoinEvent(ctx, uID2, eID, false)
 		require.NoError(t, err2)
 		require.True(t, ok2)
 
@@ -253,7 +253,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		found, err := repo.GetEventByCode(ctx, myCode)
 		assert.NoError(t, err)
 
-		_, joined, err := repo.JoinEvent(ctx, uID, found.ID)
+		_, joined, err := repo.JoinEvent(ctx, uID, found.ID, false)
 		assert.NoError(t, err)
 		assert.True(t, joined)
 
@@ -279,11 +279,11 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		uID := uuid.New()
 		found, _ := repo.GetEventByCode(ctx, myCode)
 
-		_, ok1, err1 := repo.JoinEvent(ctx, uID, found.ID)
+		_, ok1, err1 := repo.JoinEvent(ctx, uID, found.ID, false)
 		assert.NoError(t, err1)
 		assert.True(t, ok1)
 
-		_, ok2, err2 := repo.JoinEvent(ctx, uID, found.ID)
+		_, ok2, err2 := repo.JoinEvent(ctx, uID, found.ID, false)
 		assert.NoError(t, err2)
 		assert.False(t, ok2)
 
@@ -416,7 +416,7 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 
 		itemID, _ := repo.AddChecklistItem(ctx, models.ChecklistItems{ID: uuid.New(), EventID: eID, Title: "Milk"})
 		pID := uuid.New()
-		_, _, err := repo.JoinEvent(ctx, pID, eID)
+		_, _, err := repo.JoinEvent(ctx, pID, eID, false)
 		require.NoError(t, err)
 
 		ok, err := repo.MarkItemPurchased(ctx, eID, itemID, &pID, Ptr(true))
@@ -445,10 +445,203 @@ func TestEventRepository_CreateAndGet(t *testing.T) {
 		}))
 		itemID, _ := repo.AddChecklistItem(ctx, models.ChecklistItems{ID: uuid.New(), EventID: eID, Title: "Eggs"})
 		pID := uuid.New()
-		_, _, _ = repo.JoinEvent(ctx, pID, eID)
+		_, _, _ = repo.JoinEvent(ctx, pID, eID, false)
 
 		ok, err := repo.MarkItemPurchased(ctx, eID, itemID, &pID, nil)
 		assert.NoError(t, err)
 		assert.True(t, ok)
+	})
+	t.Run("Leave event - owner cannot leave", func(t *testing.T) {
+		eID := uuid.New()
+		uID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eID, CreatorID: uID, Title: "Owner Stay", EventCode: "STAY1",
+			Status: models.StatusDraft, StartsAt: time.Now().Add(time.Hour).Truncate(time.Second),
+		}))
+
+		_, _, _ = repo.JoinEvent(ctx, uID, eID, true)
+
+		left, err := repo.RemoveParticipant(ctx, uID, eID)
+
+		assert.NoError(t, err)
+		assert.False(t, left)
+	})
+	t.Run("Invite: Get by token - success", func(t *testing.T) {
+		eID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eID, CreatorID: uuid.New(), Title: "Invite Party", EventCode: "INV-123",
+			Status: models.StatusDraft, StartsAt: time.Now().Add(time.Hour).Truncate(time.Second),
+		}))
+
+		token := "TOP-SECRET-TOKEN"
+		_, err := pool.Exec(ctx,
+			"INSERT INTO event_invites (event_id, token, invite_type, max_uses, used_count) VALUES ($1, $2, $3, $4, $5)",
+			eID, token, "single", 1, 0)
+		require.NoError(t, err)
+
+		found, err := repo.GetInviteByToken(ctx, token)
+		assert.NoError(t, err)
+		assert.Equal(t, eID, found.EventID)
+		assert.Equal(t, token, found.Token)
+	})
+
+	t.Run("Invite: Get by token - not found", func(t *testing.T) {
+		_, err := repo.GetInviteByToken(ctx, "GHOST-TOKEN")
+		assert.Error(t, err)
+	})
+	t.Run("Invite: UseInvite - successful increment", func(t *testing.T) {
+		eID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eID, CreatorID: uuid.New(), Title: "Increment Test", EventCode: "INC-1",
+			Status: models.StatusDraft, StartsAt: time.Now().Add(time.Hour).Truncate(time.Second),
+		}))
+
+		token := "MULTI-USE-TOKEN"
+		var inviteID uuid.UUID
+		err := pool.QueryRow(ctx,
+			"INSERT INTO event_invites (event_id, token, invite_type, max_uses, used_count) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+			eID, token, "multi", 10, 0).Scan(&inviteID)
+		require.NoError(t, err)
+
+		ok, err := repo.UseInvite(ctx, inviteID)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		var count int
+		err = pool.QueryRow(ctx, "SELECT used_count FROM event_invites WHERE id = $1", inviteID).Scan(&count)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
+	})
+
+	t.Run("Invite: UseInvite - fail when limit reached", func(t *testing.T) {
+		eID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eID, CreatorID: uuid.New(), Title: "Limit Test", EventCode: "LIM-1",
+			Status: models.StatusDraft, StartsAt: time.Now().Add(time.Hour).Truncate(time.Second),
+		}))
+
+		token := "SINGLE-USE-ONLY"
+		var inviteID uuid.UUID
+		err := pool.QueryRow(ctx,
+			"INSERT INTO event_invites (event_id, token, invite_type, max_uses, used_count) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+			eID, token, "single", 1, 1).Scan(&inviteID)
+		require.NoError(t, err)
+
+		ok, err := repo.UseInvite(ctx, inviteID)
+
+		assert.NoError(t, err)
+		assert.False(t, ok, "Should not be able to use invite when limit is reached")
+	})
+
+	t.Run("Invite: UseInvite - unlimited works", func(t *testing.T) {
+		eID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eID, CreatorID: uuid.New(), Title: "Unlimited Test", EventCode: "UNL-1",
+			Status: models.StatusDraft, StartsAt: time.Now().Add(time.Hour).Truncate(time.Second),
+		}))
+
+		token := "FOREVER-TOKEN"
+		var inviteID uuid.UUID
+
+		query := "INSERT INTO event_invites (event_id, token, invite_type, max_uses, used_count) VALUES ($1, $2, $3, $4::int, $5) RETURNING id"
+
+		err := pool.QueryRow(ctx, query, eID, token, "unlimited", nil, 0).Scan(&inviteID)
+		require.NoError(t, err)
+
+		for i := 0; i < 3; i++ {
+			ok, err := repo.UseInvite(ctx, inviteID)
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		}
+
+		var count int
+		pool.QueryRow(ctx, "SELECT used_count FROM event_invites WHERE id = $1", inviteID).Scan(&count)
+		assert.Equal(t, 3, count)
+	})
+	t.Run("ListUserEvents - success combined", func(t *testing.T) {
+		userID := uuid.New()
+		otherID := uuid.New()
+
+		desc1 := "User is the owner of this event"
+		desc2 := "User is just a guest here"
+		desc3 := "User has nothing to do with this"
+
+		event1ID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID:          event1ID,
+			CreatorID:   userID,
+			Title:       "I am Creator",
+			Description: &desc1,
+			EventCode:   "OWNER123",
+			StartsAt:    time.Now().Add(time.Hour).Truncate(time.Second),
+			Status:      models.StatusDraft,
+		}))
+
+		event2ID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID:          event2ID,
+			CreatorID:   otherID,
+			Title:       "I am Participant",
+			Description: &desc2,
+			EventCode:   "GUEST456",
+			StartsAt:    time.Now().Add(2 * time.Hour).Truncate(time.Second),
+			Status:      models.StatusDraft,
+		}))
+
+		_, joined, err := repo.JoinEvent(ctx, userID, event2ID, false)
+		require.NoError(t, err)
+		require.True(t, joined)
+
+		event3ID := uuid.New()
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID:          event3ID,
+			CreatorID:   otherID,
+			Title:       "Stranger Event",
+			Description: &desc3,
+			EventCode:   "OTHER789",
+			StartsAt:    time.Now().Add(3 * time.Hour).Truncate(time.Second),
+			Status:      models.StatusDraft,
+		}))
+
+		events, err := repo.ListUserEvents(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.Len(t, events, 2, "Должно вернуться ровно 2 ивента (где создатель и где участник)")
+
+		var foundIDs []uuid.UUID
+		for _, e := range events {
+			foundIDs = append(foundIDs, e.ID)
+		}
+
+		assert.Contains(t, foundIDs, event1ID, "Список должен содержать ивент создателя")
+		assert.Contains(t, foundIDs, event2ID, "Список должен содержать ивент участника")
+		assert.NotContains(t, foundIDs, event3ID, "Список НЕ должен содержать абсолютно чужой ивент")
+	})
+	t.Run("GetParticipant - success", func(t *testing.T) {
+		userID := uuid.New()
+		eventID := uuid.New()
+
+		require.NoError(t, repo.CreateEvent(ctx, models.Events{
+			ID: eventID, CreatorID: uuid.New(), Title: "Party", EventCode: "PARTY1",
+			Status: models.StatusDraft, StartsAt: time.Now().Add(time.Hour).Truncate(time.Second),
+		}))
+
+		_, joined, err := repo.JoinEvent(ctx, userID, eventID, false)
+		require.NoError(t, err)
+		require.True(t, joined)
+
+		p, err := repo.GetParticipant(ctx, userID, eventID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, userID, p.UserID)
+		assert.Equal(t, eventID, p.EventID)
+		assert.False(t, p.IsOwner, "Должен быть обычным участником")
+	})
+
+	t.Run("GetParticipant - not found", func(t *testing.T) {
+		_, err := repo.GetParticipant(ctx, uuid.New(), uuid.New())
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "participant not found")
 	})
 }
