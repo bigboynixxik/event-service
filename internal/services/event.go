@@ -8,10 +8,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type EventService struct {
 	repo repository.EventRepository
+}
+
+type EventInputParams struct {
+	IsPrivate       bool            
+	Title           string          
+	Description     *string         
+	Duration        pgtype.Interval 
+	StartsAt        time.Time       
+	LocationName    *string         
+	MaxParticipants *int            
+	LocationCoords  *pgtype.Point   
 }
 
 func NewEventService(repo repository.EventRepository) *EventService {
@@ -20,35 +32,29 @@ func NewEventService(repo repository.EventRepository) *EventService {
 
 
 func (s *EventService) checkPermission(ctx context.Context, userID, eventID uuid.UUID, permission string) error {
-	participants, err := s.repo.GetEventParticipants(ctx, eventID) // Эффективнее сделать GetEventParticapant в репозитории, чтобы не делать лишних запросов
+	participant, err := s.repo.GetParticipant(ctx, userID,eventID) 
 	if err != nil {
 		return fmt.Errorf("checkPermission: %w", err)
 	}
 
-	for _, p := range participants {
-		if p.UserID != userID {
-			continue
-		}
-		if p.IsOwner {
+	if participant.IsOwner {
+		return nil
+	}
+	switch permission {
+	case "can_edit_event":
+		if participant.CanEditEvent {
 			return nil
 		}
-		switch permission {
-		case "can_edit_event":
-			if p.CanEditEvent {
-				return nil
-			}
-		case "can_manage_participants":
-			if p.CanManageParticipants {
-				return nil
-			}
-		case "can_manage_checklist":
-			if p.CanManageChecklist {
-				return nil
-			}
+	case "can_manage_participants":
+		if participant.CanManageParticipants {
+			return nil
 		}
-		return fmt.Errorf("permission denied: user %s lacks %s", userID, permission)
+	case "can_manage_checklist":
+		if participant.CanManageChecklist {
+			return nil
+		}
 	}
-	return fmt.Errorf("permission denied: user %s is not a participant", userID)
+	return fmt.Errorf("permission denied: user %s lacks %s", userID, permission)
 }
 
 var availableStatuses = map[models.EventStatus]bool{
@@ -85,7 +91,7 @@ func (s *EventService) ListEvents(ctx context.Context) ([]models.Events, error) 
 }
 
 
-func (s *EventService) ListUserEvents(ctx context.Context, userId uuid.UUID) ([]models.Events, error) { // Пока возвращает только ивенты, где юзер - создатель (т.е не вовзращет, где он участник)
+func (s *EventService) ListUserEvents(ctx context.Context, userId uuid.UUID) ([]models.Events, error) { 
 	events, err := s.repo.ListUserEvents(ctx, userId)
 	if err != nil {
 		return nil, fmt.Errorf("Service.ListUserEvents : %w", err)
@@ -119,8 +125,32 @@ func (s *EventService) JoinEvent(ctx context.Context, userId uuid.UUID, code str
 	return joined, nil
 }
 
-func (s *EventService) CreateEvent(ctx context.Context, callerId uuid.UUID, eventParams models.Events) (models.Events, error) {
-	
+func (s *EventService) CreateEvent(ctx context.Context, callerId uuid.UUID, eventParams EventInputParams) (models.Events, error) {
+	event := models.Events{
+		ID: uuid.New(),
+		CreatorID: callerId,
+		IsPrivate: eventParams.IsPrivate,
+		Title: eventParams.Title,
+		Description: eventParams.Description,
+		StartsAt: eventParams.StartsAt,
+		Duration: eventParams.Duration,
+		LocationName: eventParams.LocationName,
+		LocationCoords: eventParams.LocationCoords,
+		MaxParticipants: eventParams.MaxParticipants,
+		Status: models.StatusDraft,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	err := s.repo.CreateEvent(ctx, event)
+	if err != nil {
+		return models.Events{}, fmt.Errorf("Service.CreateEvent : %w", err)
+	}
+	_, _, err = s.repo.JoinEvent(ctx, callerId, event.ID, true)
+	if err != nil {
+		return models.Events{}, fmt.Errorf("Service.JoinEvent : %w", err)
+	}
+	return event, nil
 	
 }
 func (s *EventService) RemoveParticipant(ctx context.Context, callerId uuid.UUID, participantId uuid.UUID, eventId uuid.UUID) (bool, error) {
@@ -130,28 +160,14 @@ func (s *EventService) RemoveParticipant(ctx context.Context, callerId uuid.UUID
 	}
 
 
-	particapants, err := s.repo.GetEventParticipants(ctx, eventId)
+	particapant, err := s.repo.GetParticipant(ctx, participantId, eventId)
 	if err != nil {
 		return false, fmt.Errorf("Service.RemoveParticipant : %w", err)
 	}
 
-	var particapantFound bool
-	for _, p := range particapants {
-		if p.UserID == participantId {
-			// Проверка на удаление создателя
-			if p.IsOwner {
-				return false, fmt.Errorf("Service.RemoveParticipant : can't remove creator")
-			}
-			particapantFound = true
-			break
-		}
+	if particapant.IsOwner {
+		return false, fmt.Errorf("Service.RemoveParticipant : can't remove creator")
 	}
-
-	// Проверка на наличие участника
-	if !particapantFound {
-		return false, fmt.Errorf("Service.RemoveParticipant : participant not found")
-	}
-
 
 	removed, err := s.repo.RemoveParticipant(ctx, participantId, eventId)
 	if err != nil {
