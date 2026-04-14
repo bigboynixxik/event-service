@@ -2,62 +2,42 @@ package closer
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"sync"
-
-	"go.uber.org/multierr"
 )
 
-type closeFn func(ctx context.Context) error
-
-type item struct {
-	name string
-	fn   closeFn
-}
+type Func func(ctx context.Context) error
 
 type Closer struct {
-	log   *slog.Logger
 	mu    sync.Mutex
-	items []item
+	funcs []Func
 }
 
-func New(log *slog.Logger) *Closer {
-	return &Closer{log: log}
+func New() *Closer {
+	return &Closer{}
 }
 
-func (c *Closer) Add(name string, fn func(ctx context.Context) error) {
-	if fn == nil {
-		return
-	}
-
+func (c *Closer) Add(f Func) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.items = append(c.items, item{name, fn})
-}
-
-func (c *Closer) AddFunc(name string, fn func()) {
-	c.Add(name, func(_ context.Context) error {
-		fn()
-
-		return nil
-	})
+	c.funcs = append(c.funcs, f)
 }
 
 func (c *Closer) Close(ctx context.Context) error {
 	c.mu.Lock()
-	items := append([]item(nil), c.items...)
-	c.mu.Unlock()
+	defer c.mu.Unlock()
 
-	var result error
-	for _, item := range items {
-		if err := item.fn(ctx); err != nil {
-			result = multierr.Append(result, err)
-			c.log.Error("shutdown hook failed", "name", item.name, "err", err)
+	var errs []error
+
+	for _, f := range c.funcs {
+		if err := f(ctx); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	c.log.Info("shutdown hook finished", "result", result)
-
-	return result
+	if len(errs) > 0 {
+		return fmt.Errorf("closer errors: %v", errs)
+	}
+	return nil
 }
