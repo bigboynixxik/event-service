@@ -31,8 +31,8 @@ func NewEventService(repo repository.EventRepository) *EventService {
 }
 
 
-func (s *EventService) checkPermission(ctx context.Context, userID, eventID uuid.UUID, permission string) error {
-	participant, err := s.repo.GetParticipant(ctx, userID,eventID) 
+func checkPermission(ctx context.Context, repo repository.EventRepository, userID, eventID uuid.UUID, permission string) error {
+	participant, err := repo.GetParticipant(ctx, userID,eventID) 
 	if err != nil {
 		return fmt.Errorf("checkPermission: %w", err)
 	}
@@ -168,7 +168,7 @@ func (s *EventService) CreateEvent(ctx context.Context, callerId uuid.UUID, even
 	
 }
 func (s *EventService) RemoveParticipant(ctx context.Context, callerId uuid.UUID, participantId uuid.UUID, eventId uuid.UUID) (bool, error) {
-	err := s.checkPermission(ctx, callerId, eventId, "can_manage_participants")
+	err := checkPermission(ctx, s.repo, callerId, eventId, "can_manage_participants")
 	if err != nil {
 		return false, fmt.Errorf("Service.RemoveParticipant : %w", err)
 	}
@@ -201,7 +201,7 @@ func (s* EventService) GetEventParticipants(ctx context.Context, eventId uuid.UU
 
 
 func (s* EventService) CancelEvent(ctx context.Context, callerId uuid.UUID, eventId uuid.UUID) (bool, error) {
-	err := s.checkPermission(ctx, callerId, eventId, "can_edit_event")
+	err := checkPermission(ctx,s.repo, callerId, eventId, "can_edit_event")
 	if err != nil {
 		return false, fmt.Errorf("Service.CancelEvent : %w", err)
 	}
@@ -228,7 +228,7 @@ func (s* EventService) CreateInviteLink(ctx context.Context, callerId uuid.UUID,
 		return "", fmt.Errorf("Service.CreateInviteLink : %s", event.Status)
 	}
 	if event.IsPrivate { // Если приватный - нужно разрешение на создание ссылки
-		err := s.checkPermission(ctx, callerId, eventId, "can_manage_participants")
+		err := checkPermission(ctx, s.repo, callerId, eventId, "can_manage_participants")
 		if err != nil {
 			return "", fmt.Errorf("Service.CreateInviteLink : %w", err)
 		}
@@ -237,7 +237,7 @@ func (s* EventService) CreateInviteLink(ctx context.Context, callerId uuid.UUID,
 }
 
 func (s* EventService) UpdateEvent(ctx context.Context, callerId uuid.UUID, eventId uuid.UUID, params models.UpdateEventParams) (models.Events, error) {
-	err := s.checkPermission(ctx, callerId, eventId, "can_edit_event")
+	err := checkPermission(ctx, s.repo, callerId, eventId, "can_edit_event")
 	if err != nil {
 		return models.Events{}, fmt.Errorf("Service.UpdateEvent : %w", err)
 	}
