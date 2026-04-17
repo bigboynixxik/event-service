@@ -9,7 +9,7 @@ import (
 )
 type EventServiceInterface interface {
     GetEvent(ctx context.Context, id uuid.UUID) (*models.Events, error)
-    ListEvents(ctx context.Context) ([]models.Events, error)
+    ListEvents(ctx context.Context, filter services.ListEventsFilter) ([]models.Events, error)
     ListUserEvents(ctx context.Context, userID uuid.UUID) ([]models.Events, error)
     CreateEvent(ctx context.Context, callerID uuid.UUID, eventParams services.EventInputParams) (models.Events, error)
     UpdateEvent(ctx context.Context, callerID uuid.UUID, eventID uuid.UUID, params models.UpdateEventParams) (models.Events, error)

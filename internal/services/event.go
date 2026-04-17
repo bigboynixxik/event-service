@@ -5,6 +5,7 @@ import (
 	"eventify-events/internal/models"
 	"eventify-events/internal/repository"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,15 @@ type EventInputParams struct {
 	LocationCoords  *pgtype.Point   
 }
 
+type ListEventsFilter struct {
+    Title        *string
+    Description  *string
+    StartsAfter  *time.Time
+    StartsBefore *time.Time
+    LocationName *string
+}
+
+
 func NewEventService(repo repository.EventRepository) *EventService {
 	return &EventService{repo: repo}
 }
@@ -41,18 +51,37 @@ func (s *EventService) GetEvent(ctx context.Context, uuid uuid.UUID) (*models.Ev
 	return &event, nil
 }
 
-func (s *EventService) ListEvents(ctx context.Context) ([]models.Events, error) { // Возвращает все неотмененные и публичные ивенты
+func (s *EventService) ListEvents(ctx context.Context, filter ListEventsFilter) ([]models.Events, error) { // Возвращает все неотмененные и публичные ивенты
 	events, err := s.repo.ListEvents(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Service.ListEvents : %w", err)
 	}
-	result := make([]models.Events, 0, len(events))
+	filtredEvents := make([]models.Events, 0, len(events))
 	for _, e := range events {
 		if e.Status != models.StatusCancelled && !e.IsPrivate {
-			result = append(result, e)
+			if filter.Title != nil && !strings.Contains(strings.ToLower(e.Title), strings.ToLower(*filter.Title)) {
+				continue
+
+			} 
+			if filter.Description != nil && e.Description != nil && !strings.Contains(strings.ToLower(*e.Description), strings.ToLower(*filter.Description)) {
+				continue
+
+			} 
+			if filter.StartsAfter != nil && !e.StartsAt.After(*filter.StartsAfter) {
+				continue
+
+			} 
+			if filter.StartsBefore != nil && !e.StartsAt.Before(*filter.StartsBefore) {
+				continue
+
+			} 
+			if filter.LocationName != nil && e.LocationName != nil && !strings.Contains(strings.ToLower(*e.LocationName), strings.ToLower(*filter.LocationName)) {
+				continue
+			}
+			filtredEvents = append(filtredEvents, e)
 		}
 	}
-	return result, nil
+	return filtredEvents, nil
 }
 
 
