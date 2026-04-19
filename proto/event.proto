@@ -83,14 +83,13 @@ message EventInfo {
 }
 
 // Информация об участнике мероприятия
+// upd: убрали поле name
 message ParticipantInfo {
   string participant_id = 1;
-  // Имя
-  string name = 2;
   // Роль в мероприятии
-  string role = 3;
+  string role = 2;
   // Участие в мероприятии ('invited', 'confirmed', 'declined', 'maybe')
-  string status = 4;
+  string status = 3;
 }
 
 // Информация о предмете в чеклисте
@@ -144,7 +143,7 @@ message ListUserEventsResponse {
   repeated EventInfo events = 1;
 }
 
-// Запрос на получения всех мероприятий
+// Запрос на получение информации об мероприятии
 message GetEventRequest {
   string id = 1;
 }
@@ -175,8 +174,20 @@ message UpdateEventResponse {
   EventInfo event = 1;
 }
 
-// Пустой запрос на получение списка всех мероприятий
+// Запрос на получение списка мероприятий (с поддержкой поиска и фильтрации)
 message ListEventsRequest {
+  // Поисковый запрос (искать по title и description)
+  optional string title = 1;
+  optional string description = 2;
+
+  // Фильтр по дате: показать ивенты, которые начнутся ПОСЛЕ этого времени
+  optional google.protobuf.Timestamp starts_after = 3;
+
+  // Фильтр по дате: показать ивенты, которые начнутся ДО этого времени
+  optional google.protobuf.Timestamp starts_before = 4;
+
+  // Фильтр по локации (точное совпадение или подстрока)
+  optional string location_name = 5;
 }
 
 // Ответ на запрос получения списка мероприятий
