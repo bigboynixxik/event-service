@@ -5,7 +5,7 @@ import (
 	v1 "eventify-events/pkg/api/v1"
 	"strconv"
 	"strings"
-
+	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -65,13 +65,15 @@ func checklistToProto(items []models.ChecklistItems) []*v1.ChecklistItemInfo {
     return result
 }
 func parseCoords(coords *string) (*pgtype.Point, error) {
+	
+	
 	if coords == nil {
 		return nil, nil
 	}
 
 	latLongCoords := strings.Split(*coords, ",")
 	if len(latLongCoords) != 2 {
-		return nil, nil
+		return nil, fmt.Errorf("invalid coordinates format")
 	}
 	lat, err := strconv.ParseFloat(latLongCoords[0], 64)
 	if err != nil {

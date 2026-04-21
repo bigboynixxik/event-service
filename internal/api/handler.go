@@ -363,10 +363,6 @@ func (h* EventHandler) MarkItemPurchased (ctx context.Context, req *v1.MarkItemP
 		return nil, status.Errorf(codes.InvalidArgument, "invalid item id")
 	}
 
-	if req.BuyerId == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "buyer id is required")
-	}
-
 	var buyerId *uuid.UUID
 	if req.BuyerId != nil {
 		parsed, err := uuid.Parse(*req.BuyerId)
