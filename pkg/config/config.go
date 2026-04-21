@@ -18,13 +18,13 @@ type Config struct {
 }
 
 func LoadConfig(path string) (*Config, error) {
-	err := godotenv.Load(path)
-	if err != nil {
-		return nil, fmt.Errorf("config.LoadConfig: %w", err)
-	}
+	_ = godotenv.Load(path)
+	//if err != nil {
+	//	return nil, fmt.Errorf("config.LoadConfig: %w", err)
+	//}
 	var cfg Config
 
-	err = env.Parse(&cfg)
+	err := env.Parse(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("config.LoadConfig failed to parse config: %w", err)
 	}
